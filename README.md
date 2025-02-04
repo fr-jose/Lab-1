@@ -1,2 +1,3 @@
-# Lab-1
-Repositório para a prática de física (AV2)
+# Laboratório de Física 1
+
+Repositório para a prática de Laboratório de Física 1 - (AV2)
