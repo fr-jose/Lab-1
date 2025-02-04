@@ -1,8 +1,3 @@
-# Laboratório de Física 1
+# Miscelânia
 
-Repositório para a prática de Laboratório de Física 1 - (AV2)
-
-## Equipe:
-* Eliani Magalhães Beloni
-* Francisco José Gomes de Souza Junior
-* Jader Rezende Mohr Apollo Duarte
+* Materiais que não se enquadram nas outras categorias. Como PDF's, links etc.
