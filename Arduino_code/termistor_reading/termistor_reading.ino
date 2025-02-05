@@ -31,8 +31,7 @@ void loop() {
   // Exibe dados no serial
   Serial.print("Temperatura: ");
   Serial.print(temperaturaAtual);
-  Serial.print(" °C | PWM: ");
-  Serial.println(sinalControle);
+  Serial.println(" °C");
 
   delay(500); // Intervalo entre leituras
 }
