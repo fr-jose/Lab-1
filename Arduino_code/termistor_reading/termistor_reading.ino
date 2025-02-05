@@ -4,34 +4,40 @@
 #define BETA 3950                 // Beta do termistor (ajuste se necessário)
 #define RESISTOR_SERIE 11190      // Resistor fixo do divisor de tensão = 11,19kΩ
 
-const int pinoTermistor = A0;
-const int pinoPeltier = 9;        // Pino PWM para controlar o Peltier
+#include <LiquidCrystal.h>
 
-float temperaturaDesejada = 40.0; // Setpoint (27°C)
-float Kp = 50.0;                  // Ganho proporcional (ajuste empiricamente)
+// Inicializa o LCD com os pinos conectados
+LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+
+const int pinoTermistor = A0;
+
+
 
 void setup() {
   Serial.begin(9600);
   pinMode(pinoPeltier, OUTPUT);
+  lcd.begin(16, 2);
+  
 }
 
 void loop() {
   // Mede a temperatura atual
   float temperaturaAtual = lerTemperatura();
-
-  // Calcula o erro (diferença para o setpoint)
-  float erro = temperaturaDesejada - temperaturaAtual;
-
-  // Controle Proporcional (P)
-  int sinalControle = constrain(Kp * erro, 0, 255); // Limita entre 0 e 255 (PWM)
-
-  // Aplica o sinal ao Peltier
-  analogWrite(pinoPeltier, sinalControle);
-
-  // Exibe dados no serial
-  Serial.print("Temperatura: ");
-  Serial.print(temperaturaAtual);
-  Serial.println(" °C");
+  int valorLido = analogRead(A1);
+  // Converte o valor lido para tensão
+  float tensao = (valorLido * 5.0) / 1023.0;
+  float temp_ajustada = tensao*10;
+  float temp_ajustada1 = (temp_ajustada*6/24+23.98);
+  // Exibe "Hello, World!" na primeira linha
+  lcd.print("Atual: ");
+  lcd.print(temperaturaAtual);
+  lcd.print(" C");
+  // Move o cursor para a segunda linha (coluna 0, linha 1)
+  lcd.setCursor(0, 1);
+  // Exibe "Arduino LCD!" na segunda linha
+  lcd.print("Desejada: ");
+  lcd.print(temp_ajustada1);
+  lcd.print(" C");
 
   delay(500); // Intervalo entre leituras
 }
