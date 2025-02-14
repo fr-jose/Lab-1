@@ -2,15 +2,13 @@
 #include <LiquidCrystal.h>
 #include <math.h>
 
-// Definições dos pinos
-#define PWM_SAIDA 10   // Pino PWM para controle de potência
-#define RECEPTOR_IR 7   // Pino do receptor IR
-#define TERMISTOR_NOMINAL 11190   // Resistência do termistor a 25°C
-#define TEMPERATURA_NOMINAL 25    // Temperatura de referência (25°C)
-#define BETA 3950                 // Beta do termistor
-#define RESISTOR_SERIE 11190      // Resistor fixo do divisor de tensão
+#define PWM_SAIDA 10
+#define RECEPTOR_IR 7
+#define TERMISTOR_NOMINAL 11190
+#define TEMPERATURA_NOMINAL 25
+#define BETA 3950
+#define RESISTOR_SERIE 11190
 
-// Constantes do PID
 const float KP = 60;
 const float KI = 0;
 const float KD = 0.0;
@@ -18,10 +16,13 @@ float integral = 0.0;
 float erroAnterior = 0.0;
 unsigned long tempoAnterior = 0;
 
-// Temperaturas desejada e real
-float temperaturaDesejada = 30.0; 
+float temperaturaDesejada = 30.0;
+float temperaturaAtual = 0.0;
+bool sistemaLigado = false;
+bool telaLigada = false;
+bool pwmLigado = false;
+int pwmValor = 0;
 
-// Inicialização do LCD e do sensor IR
 LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
 IRrecv irrecv(RECEPTOR_IR);
 decode_results results;
@@ -29,76 +30,136 @@ decode_results results;
 void setup() {
     Serial.begin(115200);
     lcd.begin(16, 2);
-    lcd.print("Temp. Atual:");
-    
     pinMode(PWM_SAIDA, OUTPUT);
-    pinMode(A5, OUTPUT);  // Configura A5 como saída
-    digitalWrite(A5, HIGH); // Mantém A5 sempre ligado
-
+    pinMode(A5, OUTPUT);
+    digitalWrite(A5, LOW);
     irrecv.enableIRIn();
-    
-    // Cabeçalho CSV
+    atualizarLCD();
     Serial.println("Tempo (s),Temp Atual (C),Temp Desejada (C),PWM");
 }
 
 void loop() {
-    float temperaturaAtual = lerTemperatura();
+    temperaturaAtual = lerTemperatura();
 
-    // Controle via IR
     if (irrecv.decode(&results)) {
-        if (results.value == 0xFF906F && temperaturaDesejada < 35.0) {
-            temperaturaDesejada += 0.1;
-        } else if (results.value == 0xFFE01F && temperaturaDesejada > 24.0) {
-            temperaturaDesejada -= 0.1;
-        }
+        processarComando(results.value);
         irrecv.resume();
     }
-    
-    // Atualiza o LCD
-    lcd.setCursor(0, 1);
-    lcd.print("Desejada: ");
-    lcd.print(temperaturaDesejada, 2);
-    lcd.print(" C  ");
 
-    lcd.setCursor(0, 0);
-    lcd.print("Atual:    ");
-    lcd.print(temperaturaAtual, 2);
-    lcd.print(" C  ");
+    if (sistemaLigado) {
+        atualizarPID();
+    } else {
+        analogWrite(PWM_SAIDA, 0);
+        pwmValor = 0;
+    }
 
-    // Controle PID
+    atualizarLCD();
+    logSerial();
+    delay(100);
+}
+
+void atualizarPID() {
     float erro = temperaturaDesejada - temperaturaAtual;
     unsigned long tempoAtual = millis();
     float deltaTempo = (tempoAtual - tempoAnterior) / 1000.0;
 
     float proporcional = KP * erro;
-    integral += erro * deltaTempo;
+    integral += KI * erro * deltaTempo;
     float derivativo = KD * (erro - erroAnterior) / deltaTempo;
 
-    // Evita integral excessiva
-    if (integral > 10000.0) integral = 10000.0;
-    if (integral < -10000.0) integral = -10000.0;
+    integral = constrain(integral, -10000.0, 10000.0);
 
-    int saidaPID = (int)(proporcional + (KI * integral) + derivativo);
-    
-    if (saidaPID > 255) saidaPID = 255;
-    if (saidaPID < 0) saidaPID = 0;
-    
-    analogWrite(PWM_SAIDA, saidaPID);
+    pwmValor = (int)(proporcional + integral + derivativo);
+    if (!pwmLigado) pwmValor = 0;
+    pwmValor = constrain(pwmValor, 0, 255);
+    analogWrite(PWM_SAIDA, pwmValor);
 
-    // Atualiza valores anteriores
     erroAnterior = erro;
     tempoAnterior = tempoAtual;
+}
 
-    // Saída no formato CSV
-    Serial.print(tempoAtual / 1000.0, 3);
-    Serial.print(",");
-    Serial.print(temperaturaAtual, 2);
-    Serial.print(",");
-    Serial.print(temperaturaDesejada, 2);
-    Serial.print(",");
-    Serial.println(saidaPID);
+void processarComando(unsigned long comando) {
+    switch(comando) {
+        case 0xFFA25D: // Liga/Desliga Sistema
+            telaLigada = !telaLigada;
+            digitalWrite(A5, !telaLigada ? HIGH : LOW);
+            if(!telaLigada) pwmLigado = false;
+            if(!telaLigada) sistemaLigado = false;
+            break;
+            
+        case 0xFFE21D: // Alterna estado do sistema (mesma função do A25D)
+            sistemaLigado = !sistemaLigado;
+            
+            // Controle automático do PWM
+            if(sistemaLigado) {
+                pwmLigado = true;  // Liga PWM ao ligar sistema
+            } else {
+                pwmLigado = false; // Desliga PWM ao desligar sistema
+                pwmValor = 0;
+                analogWrite(PWM_SAIDA, 0);
+            }
+            break;
+            
+        case 0xFF18E7: // -1.00 (Botão 2)
+            ajustarTemperatura(-1.00);
+            break;
+            
+        case 0xFF7A85: // +1.00 (Botão 3)
+            ajustarTemperatura(+1.00);
+            break;
+            
+        case 0xFF38C7: // -0.10 (Botão 5)
+            ajustarTemperatura(-0.10);
+            break;
+            
+        case 0xFF5AA5: // +0.10 (Botão 6)
+            ajustarTemperatura(+0.10);
+            break;
+            
+        case 0xFF4AB5: // -0.01 (Botão 8)
+            ajustarTemperatura(-0.01);
+            break;
+            
+        case 0xFF52AD: // +0.01 (Botão 9)
+            ajustarTemperatura(+0.01);
+            break;
+    }
+}
+
+void ajustarTemperatura(float delta) {
+    float novaTemp = temperaturaDesejada + delta;
+    temperaturaDesejada = constrain(novaTemp, 27.0, 35.0);
+}
+
+void atualizarLCD() {
+    lcd.clear();
     
-    delay(250);
+    // Linha 1: NowXX.XX PWMXXX
+    lcd.setCursor(0, 0);
+    lcd.print("Now ");
+    lcd.print(temperaturaAtual, 2);
+    lcd.print(" PWM");
+    
+    // Ajusta a posição do PWM conforme o número de dígitos
+    if(pwmValor < 10) {
+        lcd.setCursor(15, 0); // 1 dígito: posição 12
+        lcd.print(pwmValor);
+        lcd.print("  "); // Limpa possíveis dígitos anteriores
+    } else if(pwmValor < 100) {
+        lcd.setCursor(14, 0); // 2 dígitos: posição 11
+        lcd.print(pwmValor);
+        lcd.print(" "); // Limpa possível dígito anterior
+    } else {
+        lcd.setCursor(13, 0); // 3 dígitos: posição 10
+        lcd.print(pwmValor);
+    }
+    
+    // Linha 2: WantXX.XX ON/OFF
+    lcd.setCursor(0, 1);
+    lcd.print("Goal ");
+    lcd.print(temperaturaDesejada, 2);
+    lcd.print("   ");
+    lcd.print(sistemaLigado ? " ON" : "OFF");
 }
 
 float lerTemperatura() {
@@ -113,3 +174,16 @@ float lerTemperatura() {
     return temperatura;
 }
 
+void logSerial() {
+    static unsigned long ultimoLog = 0;
+    if(millis() - ultimoLog >= 1000) {
+        Serial.print(millis()/1000.0, 2);
+        Serial.print(",");
+        Serial.print(temperaturaAtual, 2);
+        Serial.print(",");
+        Serial.print(temperaturaDesejada, 2);
+        Serial.print(",");
+        Serial.println(pwmValor);
+        ultimoLog = millis();
+    }
+}
