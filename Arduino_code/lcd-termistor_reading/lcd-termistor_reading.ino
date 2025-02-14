@@ -4,12 +4,12 @@
 
 #define PWM_SAIDA 10
 #define RECEPTOR_IR 7
-#define TERMISTOR_NOMINAL 11190
+#define TERMISTOR_NOMINAL 10000
 #define TEMPERATURA_NOMINAL 25
 #define BETA 3950
-#define RESISTOR_SERIE 11190
+#define RESISTOR_SERIE 10000
 
-const float KP = 60;
+const float KP = 70;
 const float KI = 0;
 const float KD = 0.0;
 float integral = 0.0;
@@ -132,6 +132,8 @@ void ajustarTemperatura(float delta) {
 }
 
 void atualizarLCD() {
+  static unsigned long ultimoLoglcd = 0;
+  if(millis() - ultimoLoglcd >= 1000) {
     lcd.clear();
     
     // Linha 1: NowXX.XX PWMXXX
@@ -160,6 +162,8 @@ void atualizarLCD() {
     lcd.print(temperaturaDesejada, 2);
     lcd.print("   ");
     lcd.print(sistemaLigado ? " ON" : "OFF");
+    ultimoLoglcd = millis();
+  }
 }
 
 float lerTemperatura() {
