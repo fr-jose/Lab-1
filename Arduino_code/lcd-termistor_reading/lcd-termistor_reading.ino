@@ -9,9 +9,9 @@
 #define BETA 3950
 #define RESISTOR_SERIE 10000
 
-const float KP = 50;
+const float KP = 40;
 const float KI = 0.05;
-const float KD = 5;
+const float KD = 20;
 float integral = 0.0;
 float erroAnterior = 0.0;
 unsigned long tempoAnterior = 0;
