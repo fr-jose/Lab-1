@@ -10,7 +10,7 @@
 #define RESISTOR_SERIE 10000
 
 const float KP = 40;
-const float KI = 0.4;
+const float KI = 0.04;
 const float KD = 20;
 float integral = 0.0;
 float erroAnterior = 0.0;
