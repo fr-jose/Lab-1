@@ -1,3 +1,0 @@
-# Imagens
-
-* Inserir imagens.
